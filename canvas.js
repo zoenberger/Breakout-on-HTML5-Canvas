@@ -1,41 +1,50 @@
 ﻿//global vars so any function can use
 var canvas = null;
 var context = null;
-var ballx = 300;
-var bally = 275;
+var ballx = null;
+var bally = null;
 var ballr = 5;
-var movex = 2;
-var movey = 2;
+var movex = null;
+var movey = null;
 var mousex = null;
-var paddlewidth = 80;
+var paddlewidth = 80; //Smaller = harder, larger = easier.
+var paddleh = 10; 
+var bottomoffset = 50; //Paddle's distance from bottom of canvas.
 var paddleleft = null;
 var winner = null;
+
 
 function init() {
     //create Canvas context
     canvas = document.getElementById('canvas1');
     context = canvas.getContext("2d");
 
-    //May be more fun using document instead of #canvas1
     //jQuery Mouse movement to set paddle location
     $(document).mousemove(function () {
             mousex = event.pageX;
     })
 
-    //Create bricks array
+    //Create bricks array NOTE: make new levels by 
+    //altering the makeBricks() function! Easy!
     makeBricks();
 
     //Start animation. Note: it's saved in variable so we can
-    //clear interval when play wins.
-    winner = setInterval(play, 10)
+    //clear interval when player wins.
+    //Changing inverval will change speed of game.
+    winner = setInterval(play, 10);
 
-    //This code is used to click to stop animation to examine code
-    //$(document).click(function(){
-    //      clearInterval(winner);
-    //})
+    //If ball is not moving, a click will start ball motion.
+    $(document).click(function()
+    {
+        if (movex == null)
+        {
+            movex = 3;
+            movey = -3;
+        }
+    })
 }
  
-//Athe animating function
+//The animating function
 function play() {
 
     //erase everything on canvas
@@ -51,30 +60,60 @@ function play() {
     } else if (paddleleft + paddlewidth > canvas.width) {
         paddleleft = canvas.width - paddlewidth;
     }
-    context.fillRect(paddleleft, canvas.height - 50, paddlewidth, 10)
+    context.fillRect(paddleleft, canvas.height - bottomoffset, paddlewidth, paddleh)
 
-    //Move the ball!
-    ballx = ballx + movex;
-    bally = bally + movey;
-
+    //If ball not moving, draw at paddle
+    //Otherwise, Move the ball!
+    if (movex == null && movey == null) {
+        ballx = paddleleft+paddlewidth/2;
+        bally = canvas.height - bottomoffset - ballr;
+    } else {
+        ballx = ballx + movex;
+        bally = bally + movey;
+    }
     //go through bricks array and see if the new ball location hits a brick.
     checkBricks();
 
     //Check if ball location is hitting the paddle.
-    if (ballx - ballr >= paddleleft-37 && ballx + ballr <= (paddleleft + paddlewidth)) {
-        if (bally + ballr >= (canvas.height - 50)) {
-            if (movey > 0) { movey = movey * -1; }
-            //console.log("ballx " + (ballx - ballr) + "-" + (ballx + ballr) + "  ballybottom  " + (bally + ballr));
-            //console.log("paddle " + String(paddleleft) + "-" + String(paddleleft + paddlewidth) + " PaddleTop " + String(canvas.height - 50));
+    if ((ballx - ballr) >= paddleleft && (ballx + ballr) <= (paddleleft + paddlewidth)) {
+        if (bally + ballr >= (canvas.height - bottomoffset) && bally-ballr <= (canvas.height-bottomoffset+paddleh)) {
+            if (movey > 0) {
+
+                //Get how far paddle intersection is from center of paddle. Adjust ball speed
+                //if ball hits near center or near edges of paddle.
+                var padhit = paddleleft + paddlewidth / 2 - ballx;
+                movey = movey * -1;
+                var sign = 1;
+                if (movex < 0) {sign = -1}
+                if (Math.abs(padhit) >30) {
+                    movex = (Math.abs(movex) + 1) * sign;
+                    console.log(">30");
+                }else if(padhit< 10){
+                    movex = 2 * sign;
+                    console.log("<6");
+                }else{
+                    movex = movex * sign;
+                    console.log("default");
+                }
+
+                console.log("offcenter ", Math.abs(padhit), " units; movex = ",movex)
+            }
+
         }
     }
 
     //Keep the ball in the play area(canvas).
-    if (bally + ballr >= canvas.height || bally - ballr <= 0) {
+    if (bally - ballr <= 0) {
         movey = movey * -1;
     }
     if (ballx+ballr >= canvas.width || ballx-ballr <= 0) {
         movex = movex * -1;
+    }
+
+    //Ball went off bottom of screen. Reset ball to paddle.
+    if (bally >= canvas.height) {
+        movex = null;
+        movey = null;
     }
 
     //Draw the ball!
@@ -93,6 +132,8 @@ function play() {
 var bricks = [];
 var brickw = 100;
 var brickh = 35;
+
+//Number of colors is number of times brick must be hit to disappear.
 var brickColors = ["orange", "blue", "green"];
 
 //Make Bricks is where you design layout. It can really be any design.
@@ -104,7 +145,7 @@ function makeBricks() {
     var y = 100;
     var row = 0;
     var col = 0
-    for (k = 0; k < 18; k++) {
+    for (k = 0; k < 22; k++) {
         bricks.push([x, y, 0]); //add to bricks array here!
         col++;
         x = x + brickw;
@@ -146,14 +187,25 @@ function checkBricks() {
     //If all bricks have been hit, then array is empty. Winner!
     if (bricks.length == 0) {
         clearInterval(winner);
-        console.log("YOU WON BABY!!!")
+        console.log("You're suffering a brick deficiency...because you won!!!")
     }
     
     //For each brick, check the ball location vs. the brick location. Update brick hit counter if true.
     for (var b = 0; b < bricks.length; b++) {
         if (ballx + ballr >= bricks[b][0] && ballx - ballr <= bricks[b][0] + brickw && bally - ballr <= bricks[b][1] + brickh && bally + ballr >= bricks[b][1]) {
             bricks[b][2] = bricks[b][2] + 1;
-            movey = movey * -1;
+
+            //sidehit & tophit check the balls previous location to see if was inside of brick.
+            //if the ball was outside the x location of a brick and is now intersecting, then it hit from side.
+            //if the ball was outside the y location of a brick and is now intersecting, thn it hit top/bottom.
+            sidehit = (ballx-movex +ballr < bricks[b][0]) || (ballx-movex-ballr >bricks[b][0]+brickw);
+            tophit = (bally - movey - ballr > bricks[b][1] + brickh) || (bally - movey + ballr < bricks[b][1]);
+
+            //ball hit on top or bottom, change ball's y direction.
+            if (tophit) { movey = movey * -1 };
+
+            //bill hit on side, change ball's x direction.
+            if (sidehit) { movex = movex * -1 }; 
         }
     }
 }
